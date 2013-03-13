@@ -2,7 +2,7 @@
 
 
 <head>
-
+	<META HTTP-EQUIV="content-type" CONTENT="text/html; charset=utf-8">
 
 
 <style>
@@ -10,7 +10,8 @@
 	body {
 		margin:0; padding:0;
 		text-align:center;
-				background-image:url(http://fithfath.com/images/wp-content/uploads/2009/08/time.jpg); 
+		background-color:#444;
+				/* background-image:url(http://fithfath.com/images/wp-content/uploads/2009/08/time.jpg); */
 				/* http://www.a-gc.com/images/2012/11/outer-space-HD-Wallpapers.jpg */
 	}
 
@@ -262,13 +263,8 @@
 <script>
 
 var reader = {
-
 	// whatever reader functionality goes here
-
-
 };
-
-
 </script>
 <script>
 
@@ -279,13 +275,13 @@ var reader = {
 
 reader.config = {};
 
-
 // make a shortcut to the easy object
 // for easier access to the data
+// EDIT :: var d = reader.config.epub.easy;
 
-var d = reader.config.epub.easy;
+var d = reader.config.json.easy;
+var opsRoot = reader.config.json.paths.opsRoot;
 
-var opsRoot = reader.config.epub.paths.opsRoot;
 
 var prevItem = null, nextItem = null;
 var navChain = [];
@@ -293,16 +289,17 @@ var navChainLookup = {};
 var spineIndex = 0;
 var i = 0;
 var prev = null;
+console.log("linearSpine is ", d.linearSpine);
 for (prop in d.linearSpine) {
 	
 	var ref = d.linearSpine[prop];
+	console.log("reference = ", ref);	
+	console.log("pushing ", ref.item.$);
 	navChain.push(ref.item.$);
 	navChainLookup[opsRoot + ref.item.$.href] = i;
 	i++;
 
 }
-
-
 
 console.log(navChain);
 
@@ -373,6 +370,8 @@ function fadeCover() {
 
 function handleTocHtml(html) {
 
+	//console.log("handling TOC with this htmlblock ", html);
+
 	// receives a wad of html representing
 	// navigable link list and overrides the
 	// click handler on each one, allowing
@@ -390,6 +389,8 @@ function handleTocHtml(html) {
 			$(this).addClass('selected');
 
 			var href = this.getAttribute('href');
+
+			console.log("html handle current href", href);
 
 			viewTransitionTocToContent();
 
@@ -411,6 +412,13 @@ function setSpineIndex(href)
 	console.log('trying to set spine index from href of '+href);
 	try {
 		spineIndex = navChainLookup[href];
+		//Handling for pg epubs which are weirdly formatted and cannot understand subsections
+		
+		if (typeof(spineIndex) == 'undefined') {
+			console.log("Not in SpineIndex!");
+			spineIndex = navChainLookup[href.substr(0, href.indexOf('#'))];
+		}
+		
 	} catch (e) {
 		console.log('exception:');
 		console.log(e);
@@ -421,14 +429,25 @@ function setSpineIndex(href)
 function loadHref(href)
 {
 
+	var opsString = "";
 	// loads a URL (ideally from an epub cache) into the content area
 	// uses a dynamically added iframe and destroys it on each use
 	// the way this function handles the iframe will have great
 	// influence on the method of maintaining navigation history
 
+	console.log('setting spine index for ', href);
 
-	console.log('setting spine index');
+	opsString = reader.config.json.paths.opsRoot;
 
+	console.log("href = ", typeof(href));
+	console.log("href start is ", href.substr(0, opsString.length));
+	console.log("opsRoot os ", opsString);
+
+	if (href.substr(0, opsString.length) != opsString) {
+		console.log("Spine reference not in root OPS folder!, appending OPS Root to href");
+		href = reader.config.json.paths.navPath + href;
+	}
+	
 	setSpineIndex(href);
 
 	console.log('spineIndex = '+spineIndex);
@@ -441,11 +460,11 @@ function loadHref(href)
 	console.log('prev index is now '+prevIndex);
 	console.log('next index is now '+nextIndex);
 
-	prevItem = (prevIndex>0) ? navChain[prevIndex] : null;
+	prevItem = (prevIndex >= 0) ? navChain[prevIndex] : null; //index starts at 0 :)
 	nextItem = (nextIndex<navChain.length) ? navChain[nextIndex] : null;
 
-	console.log('prevItem set to '+prevItem);
-	console.log('nextItem set to '+nextItem);
+	console.log('prevItem set to ', prevItem);
+	console.log('nextItem set to ', nextItem);
 
 	// with this method, in Chrome for example, the back button
 	// will truly perform a back navigation, unloading the 
@@ -461,7 +480,6 @@ function loadHref(href)
 
 	$('#content .window-view').load(function(){
 
-
 			var b = $('#content .window-view').contents().find('body');
 
 			b.css({
@@ -470,19 +488,11 @@ function loadHref(href)
 				marginLeft:'20px'
 			});
 			
-
-			b.append('<div id="rscontrol"></div>');
-
+			//b.append('<div id="rscontrol"></div>'); // EDIT readsocial hopefully
 
 			//b.html(b.html()+readsocialSnippet);
 
-
-
 	});
-
-
-
-
 
 }
 
@@ -511,15 +521,12 @@ function close()
 	});
 }
 
+//console.log("htmlNav:", reader.config.html.htmlNav);
 //console.log(reader.config.html.htmlNav);
 
-
 $(document).ready(function () {
-	
-	
-	
+		
 	setupKeyHandlers();
-
 
 	$('#navLeft, #navRight').on('mouseover', function () {
 		$(this).addClass('hover');
@@ -546,47 +553,27 @@ $(document).ready(function () {
 	    }
 	});
 
+	//console.log("HTML NAV is ", reader.config.html.htmlNav);
 
-	handleTocHtml(reader.config.html.htmlNav);
+	/* Change to accomodate serving epub 3 Navigation Documents over NCX generated ones */
+
+	if(reader.config.json.easy.isEpub3 == true) {
+		console.log("epub 3");
+		handleTocHtml(reader.config.json.easy.epub3NavHtml);
+	} else {
+		handleTocHtml(reader.config.html.htmlNav);
+		console.log("epub 2");
+	}
+	
 	viewTransitionContentToToc();
 
 	$('#coverImage').append('<img/>');
 	$('#coverImage img').attr('src', d.epub2CoverUrl);
 	
-
-
 	setTimeout(fadeCover, 2000);
-
-
-
 
 });
 
-
 </script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 </body>

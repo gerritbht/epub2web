@@ -7,11 +7,12 @@ var mime = require('mime');
 
 var epub2web = require('../index.js');
 var port = 8124;
-var cacheDir = __dirname+'/../www/cache';
+var cacheDir = __dirname+'/_cache';
 var epubDir = __dirname+'/epubs';
 
-var myTemplateName = 'vaporbook';
-var myTemplateHtml = fs.readFileSync(__dirname+'/testreader.html');
+var myTemplateName = 'testreader';
+//var myTemplateHtml = fs.readFileSync(__dirname+'/testreader.html');
+var myTemplateHtml = fs.readFileSync(__dirname+'/index.html');
 
 // for on-the-fly script injection into content docs
 
@@ -19,6 +20,7 @@ var myTemplateHtml = fs.readFileSync(__dirname+'/testreader.html');
 //var jsdom = require("jsdom").jsdom;
 
 // add custom reading template
+console.log("debug->test->cacheDir =  ", cacheDir);
 epub2web.attach(cacheDir);
 epub2web.addTemplate(myTemplateName, myTemplateHtml.toString());
 
@@ -53,7 +55,7 @@ function refreshTemplate()
 	// function to ease development, call to refresh the html
 	// without a server restart. should not be used in production.
 	
-	console.log('refreshing template...');
+	console.log('debug->test->refreshing template...');
 
 	myTemplateHtml = fs.readFileSync(__dirname+'/testreader.html');
 
@@ -71,8 +73,6 @@ epub2web.attach(cacheDir);
 var server = http.createServer(function (req,res) {
 
 	console.log(req.url);
-
-
 
 	var urlparts;
 
@@ -92,6 +92,7 @@ var server = http.createServer(function (req,res) {
 
 
 	} else if (urlparts = req.url.match(/\/cache\/([^\/]+?)\/?$/)) { /* get from cacheId */
+		console.log("debug->test->Using epub2web.reader!");
 
 			refreshTemplate();
 			epub2web.reader(
@@ -115,57 +116,37 @@ var server = http.createServer(function (req,res) {
 
 
 	} else if (urlparts = req.url.match(/\/cache\/([^\/]+?)\/(.+?)$/)) { /* get file from cache */
-
-
-
+		console.log("debug->test->Getting file from cache");
 			var cid = urlparts[1];
-			
 			var filename = cacheDir +'/'+urlparts[1]+'/'+urlparts[2];
 
 			try {
-
 				var realpath = fs.realpathSync(filename);
-
 				var stat = fs.statSync(realpath);
-
 				var content = fs.readFileSync(filename);
 
-				if(filename.match(/ml$/i)) { // is xml html xhtml
-
-
+				/*if(filename.match(/ml$/i)) { // is xml html xhtml
 					var rs = '<script>var rsconf = { base: "http://api.readsocial.net", api_base: "http://api.readsocial.net", partner_id: 8, group_id:"partner-testing-channel", container: document.body, load_handler: function () { ; }, hashgroups: [{name: "Partner Testing Channel"}], use_ui: true, use_sso: false, use_iframe: true }; var s1 = document.createElement("sc"+"ript"); s1.onload=function() { ReadSocial.API.load(rsconf); }; s1.src = "http://api.readsocial.net/js/readsocial/libRSAPI.js"; document.body.appendChild(s1);</script>';
-
 					injectScript(rs, content.toString(), function (html) {
-
 						res.writeHead(200, {
 							'Content-Type': mime.lookup(filename)
 						});
-
 					    res.end(html);
-
 					});
-
-				} else {
+				} else { */
 					res.writeHead(200, {
 						'Content-Type': mime.lookup(filename),
 						'Content-Length': stat.size
 					});
-
 				    res.end(content);				
-				}
-
-	
-
+				//}
 			} catch (e) {
-
 				console.log(e);
 			    res.end('Not Found');
-
 			}
 
-
-
 	} else if (urlparts = req.url.match(/\/read\/(.+?\.epub)(.*?)$/)) { /* get from epub filename */
+		console.log("debug->test->Getting from epub filename");
 
 			refreshTemplate();
 
@@ -190,7 +171,7 @@ var server = http.createServer(function (req,res) {
 
 				});
 
-	} else 	if(req.url=='/close') {
+	} else if(req.url=='/close') {
 
 		    res.writeHead(200, ['Content-Type', 'text/html']);
 		    res.end('Goodbye!');
