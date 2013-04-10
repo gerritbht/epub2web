@@ -16,10 +16,16 @@
   "keywords": [
     "epub"
   ],
-  "author": "vaporbook",
+  "author": {
+    "name": "vaporbook"
+  },
   "license": "BSD",
   "dependencies": {
     "epub-cache": "0.0.3",
     "mime": "~1.2.7"
-  }
+  },
+  "readme": "epub2web Epub Reading System\n==============================\n\nWhat it Does\n---------------\n\nAll-purpose, open source library for Epub content browsing and display. Combines epub-cache with epub2html in order to make Epub content readable via a browser, without special plugins, extensions or hacks.\n\n\nInstalling\n---------------\n\n    npm install epub2web\n\n\nUsage\n---------------\n\nSee the examples in the test folder. The main test will set up a rudimentary web server to illustrate what's possible. The singlebook variation is to demonstrate how you might serve a single book on one address, and the multibook variation shows how you might add directory indexing to create browsable lists of epub content for a catalog.\n\n",
+  "readmeFilename": "README.md",
+  "_id": "epub2web@0.1.2",
+  "_from": "epub2web@"
 }
