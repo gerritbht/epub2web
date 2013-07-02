@@ -24,22 +24,6 @@ console.log("debug->test->cacheDir =  ", cacheDir);
 epub2web.attach(cacheDir);
 epub2web.addTemplate(myTemplateName, myTemplateHtml.toString());
 
-function injectScript(rs,content,cb) {
-/*
-	jsdom.env(
-		content.toString(),
-		[],
-		function (errors, window) {
-			var b = window.document.getElementsByTagName('body').item(0);
-			var html = b.innerHTML + rs;
-			b.innerHTML = html;
-			cb(window.document.innerHTML);
-		}
-	); */
-	var newcontent = content.toString().replace(/<\/body>/igm, rs+'<!-- foo --></body>');
-	cb(newcontent);
-}
-
 function refreshTemplate()
 {
 	// function to ease development, call to refresh the html
@@ -62,7 +46,6 @@ epub2web.attach(cacheDir);
 var server = http.createServer(function (req,res) {
 
 	var urlparts;
-	var tempID = 'PLACEHOLDER';
 
 	if(req.url=='/favicon.ico') {
 		res.writeHead(200, {'Content-Type': 'image/png'});
@@ -76,16 +59,11 @@ var server = http.createServer(function (req,res) {
 	else if (urlparts = req.url.match(/\/cache\/([^\/]+?)\/?$/)) { /* This is the part where it should read from cache */
 
 		refreshTemplate();
-		tempID = urlparts[1];
 		epub2web.reader(
 			urlparts[1],
 			myTemplateName,
 			cacheDir,
 			function (err, cacheId, htmlApp) { // callback after webify completes
-				if (cacheId !== 'undefined') {
-					tempID = cacheId;	//doesn't work
-					console.log('tempID = ', tempID);
-				}
 
 				// the htmlApp is the whole reading system,
 				// fully configured for this cacheId, so
@@ -95,68 +73,81 @@ var server = http.createServer(function (req,res) {
 					res.writeHead(500, {'Content-Type': 'text/html'});
 					res.end('An error occurred');
 				}
-				tempID = cacheId; // doesn't work
-				console.log('tempId 2 = ', tempID);
-				res.writeHead(200, {'Content-Type': 'text/html'});
-				res.end(htmlApp);
-			});
-	} else if (urlparts = req.url.match(/\/cache\/([^\/]+?)\/(.+?)$/)) { /* get file from cache */
-			var cid = urlparts[1];
-			if(urlparts[1] === 'css') {
-				if(!urlparts[0].match(/^[0-9a-f]{32}$/i)) {
-					console.log('NoCacheUrlparts is = ', urlparts[0] +'\n'+urlparts[1]+'\n'+urlparts[2]+'\n'+urlparts[3]);
-					var filename = cacheDir +'/'+tempID+'/'+urlparts[1]+'/'+urlparts[2]; //even w/ tempID fake this is still missing the OPSRoot, so go at it from the html
-				}
+					res.writeHead(200, {'Content-Type': 'text/html'});
+					res.end(htmlApp);
+				});
+			} else if (urlparts = req.url.match(/\/cache\/([^\/]+?)\/(.+?)$/)) { /* get file from cache */
+
+			// Fix for cacheID that sometimes gets transmitted as well
+			
+			if(!urlparts[0].match(/^[0-9a-f]{32}$/i)) {
+				var filename = cacheDir +'/'+ urlparts[1]+'/'+urlparts[2];
 			}	else {
-				console.log('NoCSSUrlparts is = ', urlparts[0] +'\n'+urlparts[1]+'\n'+urlparts[2]+'\n'+urlparts[3]);
-				var filename = cacheDir +'/'+urlparts[1]+'/'+urlparts[2];				
+				var filename = urlparts[1]+'/'+urlparts[2];
 			}
-
-/*
-			if(!urlparts[1].match(/^[0-9a-f]{32}$/i)) {
-				console.log('caught it, this should be the css file'); 
-				console.log('cacheDir = ', tempID);
-				try {
-					var realpath = fs.realpathSync(cacheDir+'/'+filename);
-					var stat = fs.statSync(cacheDir+'/'+realpath);
-					var content = fs.readFileSync(cacheDir+'/'+filename);
-
-					console.log('trying second path', cacheDir+'/'+filename);
-
-					res.writeHead(200, {
-						'Content-Type': mime.lookup(filename),
-						'Content-Length': stat.size
-					});
-					res.end(content);
-				} catch (e) {
-					console.log(e);
-					res.end('Not Found');
-				}
-			}
-*/
 
 			console.log('filename is equal to ', filename);
 			try {
-				var realpath = fs.realpathSync(filename);
-				var stat = fs.statSync(realpath);
-				var content = fs.readFileSync(filename);
-
-				res.writeHead(200, {
-					'Content-Type': mime.lookup(filename),
-					'Content-Length': stat.size
+				//Replaced sync calls with async calls
+		    var content, stat, realpath;
+				fs.realpath(filename, function (err, path) {
+					if (err) {
+						console.log('realPath not found');
+						res.end('Unable to resolve path');
+						return(err);
+					}
+					realpath = path;
+					fs.readFile(filename, function (err, data) {
+						if (err) {
+							if (err.code === 'EISDIR') {
+								console.log('trying to read a directory');
+								res.end('Not A Valid File');
+							}
+							return (err);
+						}
+						content = data;
+						fs.stat(path, function (err, stats) {
+							if (err) {
+								throw err;
+							}
+							stat = stats;
+							res.writeHead(200, {
+								'Content-Type': mime.lookup(filename),
+								'Content-Length': stat.size
+							});
+		    			res.end(content);
+						});		
+					});
 				});
-		    res.end(content);				
 			} catch (e) {
 				if (e.code === 'ENOENT') {
 					if (filename.match(/[0-9a-f]{32}/)) {
-						console.log('Yet there is a cacheId, -> Adjust the JSON?');
+						console.log('No file, yet there is a cacheId, -> Adjust the JSON?');
 						console.log(urlparts[0] + '   ' + urlparts[1] + '   ' + urlparts[2]);
 						//So we'd need to add opsroot between [1] and [2] for Moby Dick, fix incoming need to adjust the JSON itself for this
 					} else {
-						console.log('And there\'s not even a cacheId -> Adjust the JSON?');
+						console.log('No file, and there\'s not even a cacheId -> Adjust the JSON?');
 						console.log(urlparts[0] + '   ' + urlparts[1] + '   ' + urlparts[2]);
 						//This is the part for epub 3 spec, so that needs cacheID AND opsRoot appended... tricky
 					}
+				} else if (e.code === 'EISDIR') {
+					console.log('Directory requested, undefined behavior for now'); //hould be fixed via #toc changes in testreader
+
+/*
+					epub2web.reader(
+						urlparts[1],
+						myTemplateName,
+						cacheDir,
+						function (err, cacheId, htmlApp) { // callback after webify completes
+
+							if(err) {
+								res.writeHead(500, {'Content-Type': 'text/html'});
+								res.end('An error occurred');
+							}
+						res.writeHead(200, {'Content-Type': 'text/html'});
+						res.end(htmlApp);
+					}); 
+*/
 				}
 				console.log(e);
 		    res.end('Not Found');
@@ -169,10 +160,7 @@ var server = http.createServer(function (req,res) {
 				epubDir+'/'+urlparts[1], /* full path of epub file */
 				myTemplateName, /* template name for reading system */
 				function (err, cacheId, htmlApp) { /* callback after webify complete */
-				if (cacheId !== 'undefined') {
-					tempID = cacheId;	
-					console.log('tempID = ', tempID);
-				}
+
 					// the htmlApp is the whole reading system,
 					// fully configured for this cacheId, so
 					// just pass it right to the browser
@@ -182,8 +170,6 @@ var server = http.createServer(function (req,res) {
 					res.writeHead(302, {
 						'Location': cacheurl
 					});
-					tempID = cacheId;
-					console.log('tempID 3 = ', tempID);
 					res.end();
 
 //					res.writeHead(200, ['Content-Type', 'text/html']);
